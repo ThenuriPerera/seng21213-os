@@ -191,3 +191,12 @@ xxd seng21213-os.img | grep -c aa55  # Verify boot signature
 ---
 
 *Happy hacking! Remember: every commercial OS started exactly like this.*
+
+## Build & Run
+
+​```bash
+make clean && make
+make run
+​```
+
+This builds the kernel image (`seng21213-os.img`) and boots it in QEMU. At the `ksh>` prompt, type `help` to see available commands.

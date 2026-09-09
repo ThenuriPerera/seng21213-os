@@ -1,3 +1,4 @@
+
 /* =============================================================================
  * SENG21213-OS :: Main Kernel  (Stage 0 – Foundations)
  * File   : kernel/kernel.c
@@ -33,6 +34,9 @@ static void cmd_clear(void);
 static void cmd_about(void);
 static void cmd_echo(const char *args);
 static void cmd_mem(void);
+static void cmd_version(void);
+static void cmd_colour(const char *args);
+static void cmd_halt(void);
 
 /* ---------------------------------------------------------------------------
  * Utility: minimal string helpers (no libc in a freestanding kernel!)
@@ -158,7 +162,26 @@ static void cmd_mem(void) {
     vga_puts_color("\n  TODO: Use BIOS int 0x15, EAX=0xE820 to get real memory map\n\n",
                    VGA_YELLOW, VGA_BLACK);
 }
+static void cmd_version(void) {
+    vga_puts_color("\n  SENG21213-OS\n", VGA_YELLOW, VGA_BLACK);
+    vga_puts("  Version : Stage 0\n");
+    vga_puts("  Build   : Kernel Foundations\n\n");
+}
 
+static void cmd_colour(const char *args) {
+    const char *p = k_ltrim(args);
+    int fg = 0, bg = 0;
+    while (*p >= '0' && *p <= '9') { fg = fg * 10 + (*p - '0'); p++; }
+    p = k_ltrim(p);
+    while (*p >= '0' && *p <= '9') { bg = bg * 10 + (*p - '0'); p++; }
+    vga_set_color((uint8_t)fg, (uint8_t)bg);
+    vga_puts("  Colour changed.\n");
+}
+
+static void cmd_halt(void) {
+    vga_puts_color("\n  System halting...\n", VGA_LIGHT_RED, VGA_BLACK);
+    __asm__ __volatile__("cli; hlt");
+}
 /* ---------------------------------------------------------------------------
  * Shell process
  * --------------------------------------------------------------------------*/
@@ -183,7 +206,9 @@ static void shell_run(void) {
         if (k_strcmp(cmd, "about") == 0) { cmd_about(); continue; }
         if (k_strcmp(cmd, "mem")   == 0) { cmd_mem();   continue; }
 
-        if (k_strncmp(cmd, "echo ", 5) == 0) {
+       if (k_strcmp(cmd, "version") == 0) { cmd_version(); continue; }
+if (k_strncmp(cmd, "colour ", 7) == 0) { cmd_colour(k_ltrim(cmd + 7)); continue; }
+if (k_strcmp(cmd, "halt") == 0) { cmd_halt(); continue; } if (k_strncmp(cmd, "echo ", 5) == 0) {
             cmd_echo(k_ltrim(cmd + 5));
             continue;
         }
