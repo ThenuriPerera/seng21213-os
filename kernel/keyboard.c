@@ -4,6 +4,7 @@
  * ============================================================================*/
 #include "keyboard.h"
 #include "vga.h"
+#include "io.h"
 #include "../include/types.h"
 
 /* I/O ports */
@@ -11,12 +12,6 @@
 #define KB_STATUS_PORT 0x64    /* Read status / write command */
 #define KB_STATUS_OBF  0x01    /* Output Buffer Full bit */
 
-/* Inline port I/O */
-static inline uint8_t inb(uint16_t port) {
-    uint8_t val;
-    __asm__ __volatile__("inb %1, %0" : "=a"(val) : "Nd"(port));
-    return val;
-}
 
 /* ---------------------------------------------------------------------------
  * Scancode Set 1 → ASCII translation table (unshifted)

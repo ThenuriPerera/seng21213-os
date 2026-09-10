@@ -28,13 +28,13 @@ ifneq (, $(shell which i686-elf-gcc 2>/dev/null))
     CC   := i686-elf-gcc
     LD   := i686-elf-ld
     CFLAGS := -m32 -std=gnu11 -ffreestanding -fno-stack-protector -fno-pie -nostdlib \
-              -Wall -Wextra -O2 -I./include
+	      -Wall -Wextra -O0 -g -I./include
     LDFLAGS := -m elf_i386 -nostdlib
 else
     CC   := gcc
     LD   := ld
     CFLAGS := -m32 -std=gnu11 -ffreestanding -fno-stack-protector -fno-pie -nostdlib \
-              -Wall -Wextra -O2 -I./include
+	      -Wall -Wextra -O0 -g -I./include
     LDFLAGS := -m elf_i386 -nostdlib
 endif
 
@@ -46,11 +46,17 @@ BOOT_BIN  := boot/boot.bin
 
 KERNEL_ASM_SRC := kernel/kernel_entry.asm
 KERNEL_ASM_OBJ := build/kernel_entry.o
-
+SWITCH_ASM_SRC := boot/switch.asm
+SWITCH_ASM_OBJ := build/switch.o
+ISR_ASM_SRC    := boot/isr_stub.asm
+ISR_ASM_OBJ    := build/isr_stub.o
 KERNEL_C_SRCS  := kernel/kernel.c \
-                   kernel/vga.c    \
-                   kernel/keyboard.c
-
+	           kernel/vga.c    \
+	           kernel/keyboard.c \
+	           kernel/process.c \
+                   kernel/pic.c \
+                   kernel/idt.c \
+                   kernel/scheduler.c
 # Add your new source files below as the course progresses:
 # Lecture 09: kernel/process.c kernel/scheduler.c
 # Lecture 10: kernel/thread.c  kernel/mutex.c
@@ -89,6 +95,16 @@ $(KERNEL_ASM_OBJ): $(KERNEL_ASM_SRC)
 	@echo "  [AS]  $<"
 	$(AS) $(ASFLAGS) $< -o $@
 
+$(SWITCH_ASM_OBJ): $(SWITCH_ASM_SRC)
+	@mkdir -p build
+	@echo "  [AS]  $<"
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(ISR_ASM_OBJ): $(ISR_ASM_SRC)
+	@mkdir -p build
+	@echo "  [AS]  $<"
+	$(AS) $(ASFLAGS) $< -o $@
+
 # ---------------------------------------------------------------------------
 # Kernel: C objects
 # ---------------------------------------------------------------------------
@@ -100,7 +116,7 @@ build/%.o: kernel/%.c
 # ---------------------------------------------------------------------------
 # Link kernel ELF, then extract flat binary
 # ---------------------------------------------------------------------------
-$(KERNEL_ELF): $(KERNEL_ASM_OBJ) $(KERNEL_C_OBJS)
+$(KERNEL_ELF): $(KERNEL_ASM_OBJ) $(SWITCH_ASM_OBJ) $(ISR_ASM_OBJ) $(KERNEL_C_OBJS)
 	@echo "  [LD]  $@"
 	$(LD) $(LDFLAGS) -T linker.ld $^ -o $@
 
