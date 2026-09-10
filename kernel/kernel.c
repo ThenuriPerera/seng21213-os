@@ -29,7 +29,7 @@
 #include "idt.h"
 #include "pic.h"
 #include "scheduler.h"
-
+#include "thread.h"
 
 /* ---------------------------------------------------------------------------
  * Forward declarations of shell commands
@@ -312,7 +312,35 @@ static void task_b(void) {
     }
 }
 
+static void thread_x(void *arg) {
+    (void)arg;
+    for (int i = 0; i < 10; i++) {
+        vga_puts_color("X", VGA_LIGHT_RED, VGA_BLACK);
+        for (volatile int j = 0; j < 500000; j++);
+        thread_yield();
+    }
+}
 
+static void thread_y(void *arg) {
+    (void)arg;
+    for (int i = 0; i < 10; i++) {
+        vga_puts_color("Y", VGA_YELLOW, VGA_BLACK);
+        for (volatile int j = 0; j < 500000; j++);
+        thread_yield();
+    }
+}
+
+static void thread_demo_process(void) {
+    thread_init();
+    thread_create(thread_x, 0);
+    thread_create(thread_y, 0);
+    thread_yield();   /* kicks off the first thread */
+
+    while (1) {
+        /* demo threads run to completion via thread_exit(); idle here after */
+        for (volatile int i = 0; i < 2000000; i++);
+    }
+}
 
 /* ---------------------------------------------------------------------------
  * Kernel entry point – called from kernel_entry.asm
@@ -329,6 +357,7 @@ void kernel_main(void) {
     process_init();
     process_create(task_a);
     process_create(task_b);
+    process_create(thread_demo_process);
     process_create(shell_run);
 
     __asm__ __volatile__("sti");   /* enable interrupts globally, last */
