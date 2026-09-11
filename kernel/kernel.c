@@ -30,6 +30,7 @@
 #include "pic.h"
 #include "scheduler.h"
 #include "thread.h"
+#include "mutex.h"
 
 /* ---------------------------------------------------------------------------
  * Forward declarations of shell commands
@@ -330,21 +331,75 @@ static void thread_y(void *arg) {
     }
 }
 
+/* ---------------------------------------------------------------------------
+ * Race condition demo — shared counter, with and without a mutex
+ * --------------------------------------------------------------------------*/
+static volatile int race_counter = 0;
+static mutex_t race_mutex;
+static int race_use_mutex = 0;   /* toggled per run */
+
+static void racer_a(void *arg) {
+    (void)arg;
+    for (int i = 0; i < 20; i++) {
+        if (race_use_mutex) mutex_lock(&race_mutex);
+        int temp = race_counter;
+        thread_yield();
+        race_counter = temp + 1;
+        if (race_use_mutex) mutex_unlock(&race_mutex);
+        thread_yield();
+    }
+}
+static void racer_b(void *arg) {
+    (void)arg;
+    for (int i = 0; i < 20; i++) {
+        if (race_use_mutex) mutex_lock(&race_mutex);
+        int temp = race_counter;
+        thread_yield();
+        race_counter = temp + 1;
+        if (race_use_mutex) mutex_unlock(&race_mutex);
+        thread_yield();
+    }
+}
 static void thread_demo_process(void) {
+    pic_mask_irq(0);   /* block the timer IRQ for the whole demo */
+
     thread_init();
     thread_create(thread_x, 0);
     thread_create(thread_y, 0);
-    thread_yield();   /* kicks off the first thread */
+    thread_yield();
+
+    race_counter = 0;
+    race_use_mutex = 0;
+    thread_init();
+    thread_create(racer_a, 0);
+    thread_create(racer_b, 0);
+    thread_yield();
+    while (thread_current() != NULL) { thread_yield(); }
+    vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+    vga_printf("\n  [Race demo] WITHOUT mutex, counter = %d  (expected 40)\n", race_counter);
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    for (volatile long d = 0; d < 30000000; d++);
+
+    race_counter = 0;   /* reset before run 2 */
+    race_use_mutex = 1;
+    mutex_init(&race_mutex);
+    thread_init();
+    thread_create(racer_a, 0);
+    thread_create(racer_b, 0);
+    thread_yield();
+    while (thread_current() != NULL) { thread_yield(); }
+    vga_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+    vga_printf("  [Race demo] WITH mutex,    counter = %d  (expected 40)\n\n", race_counter);
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+    for (volatile long d = 0; d < 30000000; d++);
+    pic_unmask_irq(0);   /* re-enable the timer now that the demo is done */
+
 
     while (1) {
-        /* demo threads run to completion via thread_exit(); idle here after */
         for (volatile int i = 0; i < 2000000; i++);
     }
 }
 
-/* ---------------------------------------------------------------------------
- * Kernel entry point – called from kernel_entry.asm
- * --------------------------------------------------------------------------*/
 void kernel_main(void) {
     vga_init();
     kb_init();

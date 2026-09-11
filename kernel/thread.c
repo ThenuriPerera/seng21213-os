@@ -11,6 +11,7 @@ static int      thread_count = 0;
 static uint32_t next_tid     = 1;
 static thread_t *ready_head  = NULL;
 static thread_t *current     = NULL;
+static uint32_t caller_esp   = 0;
 
 void thread_init(void) {
     thread_count = 0;
@@ -27,23 +28,12 @@ thread_t *thread_create(void (*entry)(void *arg), void *arg) {
     thread_t *t = &thread_table[thread_count];
     uint32_t *stack_top = &t->stack[STACK_SIZE / 4];
 
-    /* Build the stack so context_switch's `ret` lands on `entry` with `arg`
-     * sitting exactly where cdecl expects a first parameter, and a fake
-     * return address (thread_exit) so a normal `return;` inside entry()
-     * cleans the thread up automatically instead of jumping into garbage. */
     *(--stack_top) = (uint32_t)arg;
-    *(--stack_top) = (uint32_t)thread_exit;   /* fake return address */
-    *(--stack_top) = (uint32_t)entry;         /* what `ret` in context_switch jumps to */
+    *(--stack_top) = (uint32_t)thread_exit;
+    *(--stack_top) = (uint32_t)entry;
 
-    /* Dummy PUSHAD-order registers so POPAD in switch.asm resolves them */
-    *(--stack_top) = 0; /* EAX */
-    *(--stack_top) = 0; /* ECX */
-    *(--stack_top) = 0; /* EDX */
-    *(--stack_top) = 0; /* EBX */
-    *(--stack_top) = 0; /* dummy ESP */
-    *(--stack_top) = 0; /* EBP */
-    *(--stack_top) = 0; /* ESI */
-    *(--stack_top) = 0; /* EDI */
+    *(--stack_top) = 0; *(--stack_top) = 0; *(--stack_top) = 0; *(--stack_top) = 0;
+    *(--stack_top) = 0; *(--stack_top) = 0; *(--stack_top) = 0; *(--stack_top) = 0;
 
     t->tid   = next_tid++;
     t->state = READY;
@@ -52,15 +42,12 @@ thread_t *thread_create(void (*entry)(void *arg), void *arg) {
     t->name[0] = '\0';
     t->next  = NULL;
 
-    /* Insert into the circular ready list, same pattern as process.c */
     if (ready_head == NULL) {
         ready_head = t;
         t->next = t;
     } else {
         thread_t *tail = ready_head;
-        while (tail->next != ready_head) {
-            tail = tail->next;
-        }
+        while (tail->next != ready_head) tail = tail->next;
         tail->next = t;
         t->next = ready_head;
     }
@@ -69,7 +56,14 @@ thread_t *thread_create(void (*entry)(void *arg), void *arg) {
     return t;
 }
 
+/* NOTE: context_switch (boot/switch.asm) always executes `sti` on the way
+ * out, regardless of the interrupt state before the switch. To keep
+ * thread_yield() safe to call from an interrupts-disabled region (as
+ * thread_demo_process does), we re-issue `cli` immediately after every
+ * context_switch() call returns, restoring the disabled state. */
 void thread_yield(void) {
+    __asm__ __volatile__("cli");
+
     if (ready_head == NULL) {
         return;
     }
@@ -77,25 +71,36 @@ void thread_yield(void) {
     if (current == NULL) {
         current = ready_head;
         current->state = RUNNING;
-        uint32_t dummy_old_esp;
-        context_switch(&dummy_old_esp, current->esp);
+        context_switch(&caller_esp, current->esp);
+        __asm__ __volatile__("cli");
         return;
     }
 
-    thread_t *old  = current;
-    thread_t *next = old->next;
-
-    while (next->state != READY && next != old) {
-        next = next->next;
-    }
+    thread_t *old = current;
 
     if (old->state == RUNNING) {
         old->state = READY;
     }
+
+    thread_t *next = old->next;
+    int steps = 0;
+    while (next->state != READY && steps < MAX_THREADS * 2) {
+        next = next->next;
+        steps++;
+    }
+
+    if (next->state != READY) {
+        current = NULL;
+        context_switch(&old->esp, caller_esp);
+        __asm__ __volatile__("cli");
+        return;
+    }
+
     next->state = RUNNING;
     current = next;
 
     context_switch(&old->esp, next->esp);
+    __asm__ __volatile__("cli");
 }
 
 void thread_exit(void) {
@@ -103,8 +108,20 @@ void thread_exit(void) {
         current->state = TERMINATED;
     }
     thread_yield();
-    /* Never returns */
     for (;;) { }
+}
+
+void thread_block(void) {
+    if (current != NULL) {
+        current->state = BLOCKED;
+    }
+    thread_yield();
+}
+
+void thread_unblock(thread_t *t) {
+    if (t != NULL && t->state == BLOCKED) {
+        t->state = READY;
+    }
 }
 
 thread_t *thread_current(void) {
