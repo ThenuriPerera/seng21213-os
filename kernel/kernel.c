@@ -360,6 +360,86 @@ static void racer_b(void *arg) {
         thread_yield();
     }
 }
+/* ---------------------------------------------------------------------------
+ * Producer-Consumer demo — bounded ring buffer, synchronised with mutex
+ * --------------------------------------------------------------------------*/
+#define PC_BUF_SIZE 5
+#define PC_ITEMS    15
+static int pc_buffer[PC_BUF_SIZE];
+static int pc_head = 0, pc_tail = 0, pc_count = 0;
+static mutex_t pc_mutex;
+static int pc_overflow_seen  = 0;
+static int pc_underflow_seen = 0;
+
+static void producer_thread(void *arg) {
+    (void)arg;
+    for (int i = 0; i < PC_ITEMS; i++) {
+        int placed = 0;
+        while (!placed) {
+            mutex_lock(&pc_mutex);
+            if (pc_count < PC_BUF_SIZE) {
+                pc_buffer[pc_tail] = i;
+                pc_tail = (pc_tail + 1) % PC_BUF_SIZE;
+                pc_count++;
+                placed = 1;
+            } else if (pc_count > PC_BUF_SIZE) {
+                pc_overflow_seen = 1;
+            }
+            mutex_unlock(&pc_mutex);
+            thread_yield();
+        }
+    }
+}
+
+static void consumer_thread(void *arg) {
+    (void)arg;
+    for (int i = 0; i < PC_ITEMS; i++) {
+        int taken = 0;
+        while (!taken) {
+            mutex_lock(&pc_mutex);
+            if (pc_count > 0) {
+                pc_head = (pc_head + 1) % PC_BUF_SIZE;
+                pc_count--;
+                taken = 1;
+            } else if (pc_count < 0) {
+                pc_underflow_seen = 1;
+            }
+            mutex_unlock(&pc_mutex);
+            thread_yield();
+        }
+    }
+}
+
+static void pc_demo_process(void) {
+    pic_mask_irq(0);
+
+    pc_head = 0; pc_tail = 0; pc_count = 0;
+    pc_overflow_seen = 0; pc_underflow_seen = 0;
+    mutex_init(&pc_mutex);
+    thread_init();
+    thread_create(producer_thread, 0);
+    thread_create(consumer_thread, 0);
+    thread_yield();
+    while (thread_current() != NULL) { thread_yield(); }
+
+    vga_set_color(VGA_LIGHT_CYAN, VGA_BLACK);
+    vga_printf("\n  [Producer-Consumer] items=%d  final buffer count=%d  (expected 0)\n", PC_ITEMS, pc_count);
+    if (pc_overflow_seen || pc_underflow_seen) {
+        vga_set_color(VGA_LIGHT_RED, VGA_BLACK);
+        vga_printf("  [Producer-Consumer] CORRUPTION DETECTED overflow=%d underflow=%d\n\n", pc_overflow_seen, pc_underflow_seen);
+    } else {
+        vga_set_color(VGA_LIGHT_GREEN, VGA_BLACK);
+        vga_printf("  [Producer-Consumer] OK -- no overflow or underflow\n\n");
+    }
+    vga_set_color(VGA_LIGHT_GREY, VGA_BLACK);
+
+    pic_unmask_irq(0);
+
+    while (1) {
+        for (volatile int i = 0; i < 2000000; i++);
+    }
+}
+
 static void thread_demo_process(void) {
     pic_mask_irq(0);   /* block the timer IRQ for the whole demo */
 
@@ -413,6 +493,7 @@ void kernel_main(void) {
     process_create(task_a);
     process_create(task_b);
     process_create(thread_demo_process);
+    process_create(pc_demo_process);
     process_create(shell_run);
 
     __asm__ __volatile__("sti");   /* enable interrupts globally, last */

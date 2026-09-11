@@ -56,14 +56,12 @@ thread_t *thread_create(void (*entry)(void *arg), void *arg) {
     return t;
 }
 
-/* NOTE: context_switch (boot/switch.asm) always executes `sti` on the way
- * out, regardless of the interrupt state before the switch. To keep
- * thread_yield() safe to call from an interrupts-disabled region (as
- * thread_demo_process does), we re-issue `cli` immediately after every
- * context_switch() call returns, restoring the disabled state. */
+/* NOTE: timer protection during multi-threaded demos is handled at the PIC
+ * level (pic_mask_irq(0) / pic_unmask_irq(0) in kernel.c), not by toggling
+ * the CPU interrupt flag here. context_switch (boot/switch.asm) always
+ * ends with `sti`, which is fine -- with IRQ0 masked at the PIC, `sti`
+ * re-enabling the CPU flag doesn't let the timer through anyway. */
 void thread_yield(void) {
-    __asm__ __volatile__("cli");
-
     if (ready_head == NULL) {
         return;
     }
@@ -72,7 +70,6 @@ void thread_yield(void) {
         current = ready_head;
         current->state = RUNNING;
         context_switch(&caller_esp, current->esp);
-        __asm__ __volatile__("cli");
         return;
     }
 
@@ -92,7 +89,6 @@ void thread_yield(void) {
     if (next->state != READY) {
         current = NULL;
         context_switch(&old->esp, caller_esp);
-        __asm__ __volatile__("cli");
         return;
     }
 
@@ -100,7 +96,6 @@ void thread_yield(void) {
     current = next;
 
     context_switch(&old->esp, next->esp);
-    __asm__ __volatile__("cli");
 }
 
 void thread_exit(void) {
