@@ -58,7 +58,8 @@ KERNEL_C_SRCS  := kernel/kernel.c \
                    kernel/idt.c \
                    kernel/scheduler.c \
                    kernel/thread.c \
-                   kernel/mutex.c
+                   kernel/mutex.c \
+                   kernel/serial.c
 # Add your new source files below as the course progresses:
 # Lecture 09: kernel/process.c kernel/scheduler.c
 # Lecture 10: kernel/thread.c  kernel/mutex.c
@@ -140,7 +141,7 @@ $(OS_IMAGE): $(BOOT_BIN) $(KERNEL_BIN)
 # Run in QEMU
 # ---------------------------------------------------------------------------
 QEMU      := qemu-system-i386
-QEMUFLAGS := -drive format=raw,file=$(OS_IMAGE) -m 32M
+QEMUFLAGS := -drive format=raw,file=$(OS_IMAGE) -m 32M -nographic
 
 run: $(OS_IMAGE)
 	@echo "  Starting QEMU... (Close window or press Ctrl+A X to exit)"

@@ -31,6 +31,7 @@
 #include "scheduler.h"
 #include "thread.h"
 #include "mutex.h"
+#include "serial.h"
 
 /* ---------------------------------------------------------------------------
  * Forward declarations of shell commands
@@ -44,6 +45,7 @@ static void cmd_version(void);
 static void cmd_colour(const char *args);
 static void cmd_halt(void);
 static void cmd_ps(void);
+static void cmd_threads(void);
 
 /* ---------------------------------------------------------------------------
  * Utility: minimal string helpers (no libc in a freestanding kernel!)
@@ -225,6 +227,32 @@ static void cmd_ps(void) {
     vga_puts("\n");
 }
 
+static void cmd_threads(void) {
+    thread_t *table = get_thread_table();
+    int count = get_thread_count();
+
+    vga_puts_color("\n  TID  STATE      NAME\n", VGA_LIGHT_CYAN, VGA_BLACK);
+    vga_puts("  ---  ---------  --------\n");
+
+    for (int i = 0; i < count; i++) {
+        char tidbuf[12];
+        k_utoa(table[i].tid, tidbuf);
+
+        vga_puts("  ");
+        vga_puts(tidbuf);
+        vga_puts("    ");
+        vga_puts(state_name(table[i].state));
+        vga_puts("   ");
+        if (table[i].name[0] != '\0') {
+            vga_puts(table[i].name);
+        } else {
+            vga_puts("(unnamed)");
+        }
+        vga_puts("\n");
+    }
+    vga_puts("\n");
+}
+
 static void cmd_version(void) {
     vga_puts_color("\n  SENG21213-OS\n", VGA_YELLOW, VGA_BLACK);
     vga_puts("  Version : Stage 0\n");
@@ -279,8 +307,8 @@ static void shell_run(void) {
 
         /* Milestone stubs */
         if (k_strcmp(cmd, "ps") == 0) { cmd_ps(); continue; }
+        if (k_strcmp(cmd, "threads") == 0) { cmd_threads(); continue; }
         if ( k_strcmp(cmd, "kill")    == 0 ||
-            k_strcmp(cmd, "threads") == 0 ||
             k_strcmp(cmd, "free")    == 0 ||
             k_strcmp(cmd, "ls")      == 0 ||
             k_strcmp(cmd, "cat")     == 0) {
@@ -435,9 +463,7 @@ static void pc_demo_process(void) {
 
     pic_unmask_irq(0);
 
-    while (1) {
-        for (volatile int i = 0; i < 2000000; i++);
-    }
+    process_exit();
 }
 
 static void thread_demo_process(void) {
@@ -475,23 +501,23 @@ static void thread_demo_process(void) {
     pic_unmask_irq(0);   /* re-enable the timer now that the demo is done */
 
 
-    while (1) {
-        for (volatile int i = 0; i < 2000000; i++);
-    }
+    process_exit();
 }
 
 void kernel_main(void) {
     vga_init();
+    serial_init();
     kb_init();
     print_splash();
      /* --- Interrupt-driven scheduler setup --- */
     idt_init();
     pic_remap();
     scheduler_init();
+    pic_mask_irq(1);   /* keyboard is polled directly (kb_getchar), not interrupt-driven -- mask IRQ1 so an unhandled keypress interrupt cannot fault/reset the CPU */
 
     process_init();
-    process_create(task_a);
-    process_create(task_b);
+    // process_create(task_a);   // Stage 1 demo, disabled for interactive shell
+    // process_create(task_b);   // Stage 1 demo, disabled for interactive shell
     process_create(thread_demo_process);
     process_create(pc_demo_process);
     process_create(shell_run);

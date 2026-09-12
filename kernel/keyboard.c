@@ -5,6 +5,7 @@
 #include "keyboard.h"
 #include "vga.h"
 #include "io.h"
+#include "serial.h"
 #include "../include/types.h"
 
 /* I/O ports */
@@ -50,8 +51,22 @@ void kb_init(void) {
 char kb_getchar(void) {
     uint8_t sc;
     while (true) {
-        /* Wait until output buffer is full (key available) */
-        while (!(inb(KB_STATUS_PORT) & KB_STATUS_OBF));
+        /* Serial input (for -nographic/terminal testing) takes priority
+           if a character is waiting. Filter out 0xFF, which is what an
+           unconnected/unready UART data-ready bit can spuriously report
+           under some QEMU stdio-backed serial configurations. */
+        if (serial_has_char()) {
+            char sc_char = serial_read_char();
+            if ((uint8_t)sc_char != 0xFF) {
+                if (sc_char == '\r') sc_char = '\n';
+                return sc_char;
+            }
+        }
+
+        /* Poll PS/2 keyboard controller (non-blocking check) */
+        if (!(inb(KB_STATUS_PORT) & KB_STATUS_OBF)) {
+            continue;
+        }
         sc = inb(KB_DATA_PORT);
 
         if (sc & 0x80) {

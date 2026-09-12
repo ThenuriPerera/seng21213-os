@@ -82,7 +82,10 @@ void vga_set_color(vga_color_t fg, vga_color_t bg) {
     cur_attr = VGA_ATTR(fg, bg);
 }
 
+#include "serial.h"
+
 void vga_putchar(char c) {
+    serial_putchar(c);
     if (c == '\n') {
         cursor_col = 0;
         cursor_row++;

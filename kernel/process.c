@@ -61,8 +61,7 @@ pcb_t *process_create(void (*entry)(void)) {
         tail->next = p;
         p->next = ready_head;
     }
-
-    process_count++;
+process_count++;
     return p;
 }
 
@@ -84,8 +83,7 @@ void scheduler_tick(void) {
 
     if (current == NULL) {
         /* First ever switch: just start at the head, no old context to save */
-        current = ready_head;
-        current->state = RUNNING;
+        current = ready_head;current->state = RUNNING;
         uint32_t dummy_old_esp;
         context_switch(&dummy_old_esp, current->esp);
         return;
@@ -98,6 +96,15 @@ void scheduler_tick(void) {
     while (next->state != READY && next != old) {
         next = next->next;
     }
+
+    /* Only one process left ready (next == old): nothing to switch to,
+       just keep running -- switching to ourselves is unnecessary and
+       risks corrupting the saved stack pointer over repeated ticks. */
+    if (next == old) {
+        if (old->state != RUNNING) {
+            old->state = RUNNING;
+        }
+        return;}
 
     if (old->state == RUNNING) {
         old->state = READY;
