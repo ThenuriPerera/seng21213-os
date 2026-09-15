@@ -85,19 +85,25 @@ void vga_set_color(vga_color_t fg, vga_color_t bg) {
 #include "serial.h"
 
 void vga_putchar(char c) {
-    serial_putchar(c);
-    if (c == '\n') {
+    if (c == '\b') {
+        serial_putchar('\b');
+        serial_putchar(' ');
+        serial_putchar('\b');
+        if (cursor_col > 0) cursor_col--;
+        vga_write_cell(cursor_row, cursor_col, ' ', cur_attr);
+    } else if (c == '\n') {
+        serial_putchar(c);
         cursor_col = 0;
         cursor_row++;
     } else if (c == '\r') {
+        serial_putchar(c);
         cursor_col = 0;
     } else if (c == '\t') {
+        serial_putchar(c);
         cursor_col = (cursor_col + 8) & ~7;
         if (cursor_col >= VGA_COLS) { cursor_col = 0; cursor_row++; }
-    } else if (c == '\b') {
-        if (cursor_col > 0) cursor_col--;
-        vga_write_cell(cursor_row, cursor_col, ' ', cur_attr);
     } else {
+        serial_putchar(c);
         vga_write_cell(cursor_row, cursor_col, c, cur_attr);
         cursor_col++;
         if (cursor_col >= VGA_COLS) { cursor_col = 0; cursor_row++; }

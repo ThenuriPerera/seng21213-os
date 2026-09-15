@@ -50,6 +50,7 @@ load_kernel:
 
     mov  si, msg_ok
     call print_rm
+    call detect_memory
 
 ; ---------------------------------------------------------------------------
 ; Enter Protected Mode
@@ -89,6 +90,41 @@ init_pm32:
     hlt
 
 ; ---------------------------------------------------------------------------
+; Subroutine: detect_memory - BIOS INT 0x15, EAX=0xE820 memory map
+; Stores entry count at E820_COUNT_ADDR (word) and entries at E820_BUFFER
+; (24 bytes each: base(8) + length(8) + type(4) + extended attrs(4))
+; ---------------------------------------------------------------------------
+[BITS 16]
+detect_memory:
+    pusha
+    push es
+    xor  ax, ax
+    mov  es, ax         ; ES must be 0 -- E820 writes to ES:DI, and ES may
+                         ; still hold 0x1000 from the earlier disk read
+    xor  ebx, ebx
+    mov  di, E820_BUFFER
+    xor  bp, bp
+.e820_loop:
+    mov  eax, 0xE820
+    mov  ecx, 24
+    mov  edx, 0x534D4150
+    int  0x15
+    jc   .e820_done
+    cmp  eax, 0x534D4150
+    jne  .e820_done
+    add  di, 24
+    inc  bp
+    cmp  bp, 64
+    jae  .e820_done
+    test ebx, ebx
+    jnz  .e820_loop
+.e820_done:
+    mov  [E820_COUNT_ADDR], bp
+    pop  es
+    popa
+    ret
+
+; ---------------------------------------------------------------------------
 ; Error handlers
 ; ---------------------------------------------------------------------------
 [BITS 16]
@@ -117,6 +153,9 @@ print_rm:
 ; Data
 ; ---------------------------------------------------------------------------
 boot_drive  db 0
+
+E820_COUNT_ADDR equ 0x8000
+E820_BUFFER     equ 0x8004
 
 msg_banner  db 13, 10, '  ================================', 13, 10
             db '  SENG21213-OS  |  Stage 0        ', 13, 10

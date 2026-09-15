@@ -49,6 +49,8 @@ KERNEL_ASM_OBJ := build/kernel_entry.o
 SWITCH_ASM_SRC := boot/switch.asm
 SWITCH_ASM_OBJ := build/switch.o
 ISR_ASM_SRC    := boot/isr_stub.asm
+PAGING_ASM_SRC := boot/paging.asm
+PAGING_ASM_OBJ := build/paging.o
 ISR_ASM_OBJ    := build/isr_stub.o
 KERNEL_C_SRCS  := kernel/kernel.c \
 	           kernel/vga.c    \
@@ -59,7 +61,9 @@ KERNEL_C_SRCS  := kernel/kernel.c \
                    kernel/scheduler.c \
                    kernel/thread.c \
                    kernel/mutex.c \
-                   kernel/serial.c
+                   kernel/serial.c \
+                   kernel/pmm.c \
+                   kernel/vmm.c
 # Add your new source files below as the course progresses:
 # Lecture 09: kernel/process.c kernel/scheduler.c
 # Lecture 10: kernel/thread.c  kernel/mutex.c
@@ -108,6 +112,11 @@ $(ISR_ASM_OBJ): $(ISR_ASM_SRC)
 	@echo "  [AS]  $<"
 	$(AS) $(ASFLAGS) $< -o $@
 
+$(PAGING_ASM_OBJ): $(PAGING_ASM_SRC)
+	@mkdir -p build
+	@echo "  [AS]  $<"
+	$(AS) $(ASFLAGS) $< -o $@
+
 # ---------------------------------------------------------------------------
 # Kernel: C objects
 # ---------------------------------------------------------------------------
@@ -119,7 +128,7 @@ build/%.o: kernel/%.c
 # ---------------------------------------------------------------------------
 # Link kernel ELF, then extract flat binary
 # ---------------------------------------------------------------------------
-$(KERNEL_ELF): $(KERNEL_ASM_OBJ) $(SWITCH_ASM_OBJ) $(ISR_ASM_OBJ) $(KERNEL_C_OBJS)
+$(KERNEL_ELF): $(KERNEL_ASM_OBJ) $(SWITCH_ASM_OBJ) $(ISR_ASM_OBJ) $(PAGING_ASM_OBJ) $(KERNEL_C_OBJS)
 	@echo "  [LD]  $@"
 	$(LD) $(LDFLAGS) -T linker.ld $^ -o $@
 

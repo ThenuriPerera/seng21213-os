@@ -24,6 +24,8 @@
 
 #include "vga.h"
 #include "keyboard.h"
+#include "pmm.h"
+#include "vmm.h"
 #include "../include/types.h"
 #include "../include/process.h"
 #include "idt.h"
@@ -41,6 +43,7 @@ static void cmd_clear(void);
 static void cmd_about(void);
 static void cmd_echo(const char *args);
 static void cmd_mem(void);
+static void cmd_free(void);
 static void cmd_version(void);
 static void cmd_colour(const char *args);
 static void cmd_halt(void);
@@ -201,6 +204,17 @@ static void cmd_mem(void) {
                    VGA_YELLOW, VGA_BLACK);
 }
 
+static void cmd_free(void) {
+    uint32_t total_kb, used_kb, free_kb;
+    pmm_get_stats(&total_kb, &used_kb, &free_kb);
+
+    vga_puts_color("\n  Memory (PMM):\n", VGA_LIGHT_CYAN, VGA_BLACK);
+    vga_puts("  ------------------------------------------\n");
+    vga_printf("  Total: %u KB\n", total_kb);
+    vga_printf("  Used:  %u KB\n", used_kb);
+    vga_printf("  Free:  %u KB\n\n", free_kb);
+}
+
 static void cmd_ps(void) {
     pcb_t *table = get_process_table();
     int count = get_process_count();
@@ -308,8 +322,8 @@ static void shell_run(void) {
         /* Milestone stubs */
         if (k_strcmp(cmd, "ps") == 0) { cmd_ps(); continue; }
         if (k_strcmp(cmd, "threads") == 0) { cmd_threads(); continue; }
+        if (k_strcmp(cmd, "free") == 0) { cmd_free(); continue; }
         if ( k_strcmp(cmd, "kill")    == 0 ||
-            k_strcmp(cmd, "free")    == 0 ||
             k_strcmp(cmd, "ls")      == 0 ||
             k_strcmp(cmd, "cat")     == 0) {
             vga_puts_color("  [TODO] This command is not yet implemented.\n",
@@ -507,6 +521,8 @@ static void thread_demo_process(void) {
 void kernel_main(void) {
     vga_init();
     serial_init();
+    pmm_init();
+    vmm_init();
     kb_init();
     print_splash();
      /* --- Interrupt-driven scheduler setup --- */

@@ -59,6 +59,7 @@ char kb_getchar(void) {
             char sc_char = serial_read_char();
             if ((uint8_t)sc_char != 0xFF) {
                 if (sc_char == '\r') sc_char = '\n';
+                if ((uint8_t)sc_char == 0x7F) sc_char = '\b';
                 return sc_char;
             }
         }
