@@ -27,8 +27,10 @@ SECTIONS {
     }
 
     .bss : {
+        __bss_start = .;
         *(COMMON)
-        *(.bss)           /* Uninitialised data – zeroed by convention */
+        *(.bss)           /* Uninitialised data — zeroed explicitly at boot */
+        __bss_end = .;
     }
 
     /DISCARD/ : {

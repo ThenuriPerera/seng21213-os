@@ -200,3 +200,33 @@ make run
 ​```
 
 This builds the kernel image (`seng21213-os.img`) and boots it in QEMU. At the `ksh>` prompt, type `help` to see available commands.
+
+---
+
+## Stage 4 — RAM Disk File System ✅
+
+Implements:
+- 128 KB RAM disk (`kernel/ramdisk.c`) — static byte array backing store,
+  sized to fit safely below the kernel stack at `0x90000`
+- Flat file system (`kernel/fs.c`): superblock, block-usage bitmap,
+  inode-usage bitmap, flat directory, inodes with 8 direct block pointers
+  (32 KB max file size, 16 files max)
+- Core API: `fs_init`, `fs_create`, `fs_open`, `fs_read`, `fs_write`,
+  `fs_close`, `fs_unlink`, `fs_list`
+- Shell commands: `ls`, `cat <file>`, `touch <file>`, `write <file> <text>`,
+  `rm <file>`
+
+### Tested
+- `make all` — clean build, zero errors
+- `make run` — boots to shell; verified manually through `ksh>`:
+  - Created 5 files (`a.txt`–`e.txt`)
+  - Wrote text to `a.txt`, read it back correctly via `cat`
+  - `ls` correctly reflects file count and byte size after every operation
+  - Removed `b.txt`; confirmed `ls` no longer lists it and `cat b.txt`
+    fails cleanly with "File not found" (no crash)
+
+### Known limitations
+- RAM disk is not persistent across reboots (in-memory only, by design —
+  no physical disk backing for this assignment's scope)
+- Max 16 files total, max 32 KB per file (8 direct blocks × 4 KB, no
+  indirect block pointers)
